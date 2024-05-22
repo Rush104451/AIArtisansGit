@@ -1,0 +1,57 @@
+name: Code Comment Generation
+ 
+on:
+  pull_request:
+    types: [opened, reopened]
+ 
+jobs:
+  generate-comments:
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+   
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'  # Adjust the Python version as needed
+ 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai  # Install the OpenAI package
+     
+      - name: Filter and copy files
+        run: |
+          mkdir filtered_files
+          git ls-files | grep -E '\.css$|\.jsx$|\.js$|\.py$' | xargs -I {} cp {} filtered_files/
+          ls filtered_files
+     
+      - name: Run comment generation script
+        run: python reviewmycode.py filtered_files > comment.txt
+
+      - name: Check if comment.txt is generated
+        run: |
+          ls comment.txt || echo "comment.txt not found"
+        
+      - name: Read comment file
+        run: |
+          cat comment.txt
+        id: read-comment
+     
+      
+ 
+      - name: Add comment to PR
+        uses: actions/github-script@v4
+        with:
+          github-token: ${{ secrets.MY_GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const comment = fs.readFileSync('${{ github.workspace }}/comment.txt', 'utf8');
+            const { owner, repo } = context.repo;
+            const { number } = context.issue;
+            console.log('Owner:', owner);
+            console.log('Repository:', repo);
+            console.log('Issue Number:', number);
+            github.issues.createComment({ owner, repo, issue_number: number, body: comment });
